@@ -121,12 +121,17 @@ if [ "$ARCH" = "x86_64" ]; then
     [ -z "$DISK" ] || QEMU_ARGS+=(-hda "$DISK")
     QEMU_ARGS+=(-boot order=d -cdrom "$ISO")
 else
-    # aarch64: virt machine; pass kernels/devices via the -- passthrough.
-    QEMU_ARGS+=(-machine virt -cpu max -m "$MEM" -smp "$CPUS" -serial stdio)
+    # aarch64: virt machine. ramfb gives the machine window a display
+    # (otherwise the GUI would show the QEMU (qemu) monitor prompt instead
+    # of the OS screen); pass kernels/devices via the -- passthrough, e.g.
+    #   ncvm -a -- -kernel codeos-1-kernel-arm64.bin
+    QEMU_ARGS+=(-machine virt -cpu max -m "$MEM" -smp "$CPUS" -serial stdio \
+                -device ramfb)
 fi
 
-# acceleration: KVM when the host has it, else threaded TCG
-if [ -e /dev/kvm ]; then
+# acceleration: KVM only accelerates the host's own arch (x86_64 here);
+# the aarch64 target always runs under TCG even when /dev/kvm exists.
+if [ "$ARCH" = "x86_64" ] && [ -e /dev/kvm ]; then
     QEMU_ARGS+=(-accel kvm)
 elif [ "$ARCH" = "x86_64" ]; then
     QEMU_ARGS+=(-accel tcg,thread=multi)
@@ -135,6 +140,10 @@ fi
 if [ "$HEADLESS" -eq 1 ]; then
     QEMU_ARGS+=(-display none)
 fi
+
+# The VM's own screen takes the window; no separate (qemu) monitor.
+# Override with `ncvm -- -monitor stdio` if you want one.
+QEMU_ARGS+=(-monitor none)
 
 QEMU_ARGS+=("${EXTRA[@]}")
 
