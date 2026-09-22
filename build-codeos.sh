@@ -46,7 +46,14 @@ bootstrap() {
     if [ "$QEMU_SRC" != "." ]; then
         echo "==> Applying ncvm patches to ${QEMU_SRC}/ ..."
         (cd "$QEMU_SRC" && for p in "$OLDPWD"/patches/*.patch; do
-            git apply --check "$p" 2>/dev/null || git apply "$p"
+            if git apply --check --reverse "$p" 2>/dev/null; then
+                continue                      # already applied
+            fi
+            if git apply --check "$p" 2>/dev/null; then
+                git apply "$p"
+            else
+                echo "    ! patch $p cannot be applied cleanly (skipping)" >&2
+            fi
         done)
         echo "==> Installing device configs (codeos.mak) ..."
         mkdir -p "$QEMU_SRC/configs/devices/x86_64-softmmu" \
