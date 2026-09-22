@@ -26,11 +26,43 @@ EDK2 on the virt machine.
   builders (`patches/0001-codeos-strip-acpi-cxl.patch`) so the firmware
   tables build without the CXL machinery.
 
+## Rust memory-handler device
+
+The `ncvm` portal device is implemented in Rust: its MMIO and I/O-port
+memory handlers (`rust/hw/ncvm/`) are built with the `qemu-api`
+`MemoryRegionOps` bindings, the same mechanism upstream's Rust `pl011`
+and `hpet` devices use. The C side only provides the QOM shell
+(`hw/ncvm/Kconfig`, `ncvm_create()` in `hw/i386/pc_q35.c`); `CONFIG_NCVM`
+selects the Rust crate (`X_NCVM_RUST`) when the build has Rust enabled.
+
+The device gives the guest an identity/status portal so it can detect the
+emulator it runs under:
+
+- **I/O ports 0x740..0x747** (x86_64 q35): `0x740..0x743` = magic
+  `N C V M`, `0x744` = features byte (bit0 = Rust memory handler,
+  bit1 = legacy devices pruned), `0x747` = guest-command byte register
+  (RW echo). (0x630 was avoided: it is the q35 ACPI SMI port.)
+- **MMIO window 0xfeb00000 (4 KiB)**: full identity block (magic,
+  features, QEMU BCD version, ncvm revision, `ncvm/rust-0.1` tag) plus a
+  32-bit command register at `0x20` (echo at `0x24`).
+
+This build requires rustc/cargo (≥ 1.83), `bindgen` and `clang`'s
+libclang; `build-codeos.sh` enforces this and auto-installs bindgen-cli via
+cargo when missing. Set `LIBCLANG_PATH` if libclang is not in a default
+location.
+
 ## Quickstart
 
 Requires: `git`, `gcc`, `make`, `ninja`, `pkg-config`, `python3`, `glib2`
 and `pixman` dev headers (Arch: `base-devel ninja python pkgconf glib2
-pixman`).
+pixman`), plus a Rust toolchain and clang for the Rust device:
+
+```sh
+# Arch
+sudo pacman -S --needed clang rust      # bindgen-cli is auto-installed
+# Debian/Ubuntu
+sudo apt install clang cargo rustc
+```
 
 ```sh
 git clone https://github.com/tech-for-everyone/NCVM.git
@@ -79,10 +111,15 @@ build-codeos.sh                            build + bootstrap script
 ncvm                                       CodeOS VM runner (wrapper, source)
 configs/devices/<arch>-softmmu/codeos.mak  per-target device deps
 patches/0001-codeos-strip-acpi-cxl.patch   ACPI_CXL removal + guards
+patches/0002-codeos-ncvm-device.patch      q35/Rust hooks for the ncvm portal
+include/hw/ncvm/ncvm.h                     ncvm portal device header (overlay)
+hw/ncvm/Kconfig                            ncvm portal device Kconfig (overlay)
+rust/hw/ncvm/                              ncvm portal device Rust crate
 src/qemu/                                  QEMU v10.2.4 checkout (gitignored)
 build-<arch>/  install-<arch>/  bin/       build outputs (gitignored)
 share/qemu                                 firmware data used by bin/ (gitignored)
 ```
 
-The `codeos.mak` device configs and the ACPI patch are the source of
-truth; the QEMU tree itself stays pristine upstream except for these.
+The `codeos.mak` device configs, the overlay files and the patches are
+the source of truth; the QEMU tree itself stays pristine upstream except
+for these.
