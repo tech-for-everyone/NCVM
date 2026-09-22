@@ -53,12 +53,15 @@ way CodeOS expects and launches it.
 ./bin/ncvm --iso path.iso     # boot a specific ISO
 ./bin/ncvm --disk disk.img    # attach a disk (default: disk.img next to ISO)
 ./bin/ncvm -- <qemu args>     # anything after -- goes straight to QEMU
-./bin/ncvm -a -- ...          # use the aarch64 (virt) binary
+./bin/ncvm -a -- -kernel \    # use the aarch64 (virt) binary; attach
+  codeos-1-kernel-arm64.bin   # the arm64 kernel ELF (ramfb screen, TCG)
 ```
 
 The preset: q35 machine, std VGA + EDID, USB EHCI + tablet/kbd, e1000
 user-net with `hostfwd tcp::7070-:80` and `tcp::2222-:22`, KVM when
-`/dev/kvm` exists, threaded TCG otherwise.
+`/dev/kvm` exists (x86_64 only), threaded TCG otherwise. aarch64 runs
+under TCG with a `ramfb` display, and `-monitor none` keeps the (qemu)
+monitor off stdio for both archs (override: `ncvm -- -monitor stdio`).
 
 The ISO is located automatically (env `NCVM_ISO`, `./codeos-1-kernel.iso`,
 `../CodeOS/kernel/`, `~/CodeOS/kernel/`, `~/Projects/CodeOS/kernel/`); build
