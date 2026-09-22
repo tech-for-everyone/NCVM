@@ -4,6 +4,7 @@
 # Builds two minimal system emulators from QEMU v10.2.4:
 #   bin/ncvm-x86_64    - q35 machine only (the CodeOS desktop target)
 #   bin/ncvm-aarch64   - virt machine only (the CodeOS/Zircon ARM64 target)
+#   bin/ncvm           - CodeOS VM runner wrapper (launches the VMs)
 #
 # Everything the binaries need (BIOS, EDK2 firmware, VGA ROMs, ...) is
 # installed next to them under share/qemu so they run straight from bin/.
@@ -12,7 +13,7 @@
 #   bash build-codeos.sh            # build both, refresh bin/ + share/qemu
 #   bash build-codeos.sh x86_64     # build just the x86_64 target
 #   bash build-codeos.sh aarch64    # build just the aarch64 target
-#   bash build-codeos.sh install    # also copy to /usr/local/bin (+ data)
+#   bash build-codeos.sh install    # also copy to /usr/local/bin (+ data, wrapper)
 #
 # Env:
 #   NCVM_QEMU_SRC   existing QEMU checkout to reuse (default: ./src/qemu).
@@ -85,6 +86,16 @@ build_target() { # $1 = arch (x86_64|aarch64), $2 = target-list, $3 = device set
     fi
 }
 
+# the `ncvm` runner wrapper (CodeOS VM launcher) beside the binaries
+install_runner() {
+    if [ -f ./ncvm ]; then
+        mkdir -p bin
+        cp ./ncvm bin/ncvm
+        chmod +x bin/ncvm
+        echo "==> ncvm runner -> bin/ncvm"
+    fi
+}
+
 if [ "$TARGET" = "install" ]; then
     # install eggs-mode: build both first, then put them + data in place
     TARGET=all
@@ -96,13 +107,16 @@ if [ "$TARGET" = "install" ]; then
     sudo cp -r install-x86_64/share/qemu/. /usr/local/share/qemu/
     sudo cp bin/ncvm-x86_64 /usr/local/bin/
     sudo cp bin/ncvm-aarch64 /usr/local/bin/
-    echo "Installed: /usr/local/bin/ncvm-x86_64 /usr/local/bin/ncvm-aarch64"
+    install_runner
+    sudo cp bin/ncvm /usr/local/bin/
+    echo "Installed: /usr/local/bin/ncvm-x86_64 /usr/local/bin/ncvm-aarch64 /usr/local/bin/ncvm"
     exit 0
 fi
 
 bootstrap
 build_target x86_64   x86_64-softmmu   codeos
 build_target aarch64  aarch64-softmmu  codeos
+install_runner
 
 # ── 2. Data dir so the copied binaries find BIOS/EDK2 from bin/ ────────────
 # QEMU resolves its data dir relative to the executable (bin/../share/qemu);
@@ -113,5 +127,5 @@ if have x86_64 && [ ! -e share/qemu ]; then
     ln -s "$PWD/install-x86_64/share/qemu" share/qemu
 fi
 
-echo "Done: $PWD/bin/ncvm-x86_64 $PWD/bin/ncvm-aarch64"
-echo "Try:  ./bin/ncvm-x86_64 -machine q35 -m 1G -cdrom /path/to/codeos.iso -boot order=d"
+echo "Done: $PWD/bin/ncvm-x86_64 $PWD/bin/ncvm-aarch64 $PWD/bin/ncvm"
+echo "Try:  ./bin/ncvm           # boot CodeOS (x86_64, q35, ISO auto-detect)"
